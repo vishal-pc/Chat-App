@@ -10,7 +10,6 @@ interface IUser extends Document {
   gender: string;
   isOnline: boolean;
   isUserActive: boolean;
-  otp: number;
 }
 
 const UserSchema: Schema<IUser> = new mongoose.Schema(
@@ -24,7 +23,6 @@ const UserSchema: Schema<IUser> = new mongoose.Schema(
     gender: { type: String },
     isOnline: { type: Boolean, default: false },
     isUserActive: { type: Boolean, default: false },
-    otp: { type: Number, default: 0 },
   },
   { timestamps: true }
 );

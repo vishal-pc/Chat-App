@@ -1,19 +1,22 @@
 import { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import User from "../models/userModel";
-import { emailValidate, generateOTP, passwordRegex } from "../utils/helper";
+import { emailValidate, passwordRegex } from "../utils/helper";
 import jwt from "jsonwebtoken";
 import { envConfig } from "../config/envConfig";
 import { UserType } from "../middleware/auth";
 
-const sendOTPToMobile = (otp: string, mobileNumber: string) => {
-  console.log(`Sending OTP ${otp} to mobile number ${mobileNumber}`);
-};
-
 export const userRegister = async (req: Request, res: Response) => {
   try {
-    const { firstName, lastName, userName, email, mobileNumber, gender } =
-      req.body;
+    const {
+      firstName,
+      lastName,
+      userName,
+      email,
+      mobileNumber,
+      gender,
+      password,
+    } = req.body;
     // Validate email format
     if (!emailValidate(email)) {
       return res.status(400).json({
@@ -29,66 +32,6 @@ export const userRegister = async (req: Request, res: Response) => {
         success: false,
       });
     }
-    const otp = generateOTP();
-    sendOTPToMobile(otp, mobileNumber);
-    const token = jwt.sign(
-      {
-        firstName,
-        lastName,
-        userName,
-        email,
-        mobileNumber,
-        gender,
-        otp,
-      },
-      envConfig.Jwt_Secret,
-      { expiresIn: "10m" }
-    );
-
-    console.log(`Your OTP for registration is ${otp}`);
-
-    return res.status(200).json({
-      message: "OTP sent to your mobile number. Please verify.",
-      token,
-      success: true,
-    });
-  } catch (error) {
-    console.error("Error in register user!", error);
-    return res.status(500).json({
-      message: "Error in register user!",
-      success: false,
-    });
-  }
-};
-
-export const verifyOTP = async (req: Request, res: Response) => {
-  try {
-    const { token, otp, password } = req.body;
-    const decodedToken = jwt.verify(token, envConfig.Jwt_Secret) as {
-      otp: number;
-      firstName: string;
-      lastName: string;
-      userName: string;
-      email: string;
-      mobileNumber: string;
-      gender: string;
-    };
-
-    if (!decodedToken) {
-      return res.status(400).json({
-        message: "Invalid token",
-        success: false,
-      });
-    }
-    const storedOTP = decodedToken.otp;
-
-    if (storedOTP !== otp) {
-      return res.status(400).json({
-        message: "Invalid OTP. Please try again.",
-        success: false,
-      });
-    }
-
     // Validate password strength
     if (!passwordRegex.test(password)) {
       return res.status(400).json({
@@ -101,10 +44,14 @@ export const verifyOTP = async (req: Request, res: Response) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const newUser = {
-      ...decodedToken,
+      firstName,
+      lastName,
+      userName,
+      email,
+      mobileNumber,
+      gender,
       password: hashedPassword,
       isOnline: false,
-      otp: 0,
     };
 
     const userSaved = await User.create(newUser);
@@ -119,9 +66,9 @@ export const verifyOTP = async (req: Request, res: Response) => {
       });
     }
   } catch (error) {
-    console.error("Error in verifying OTP!", error);
+    console.error("Error in register user!", error);
     return res.status(500).json({
-      message: "Error in verifying OTP!",
+      message: "Error in register user!",
       success: false,
     });
   }
