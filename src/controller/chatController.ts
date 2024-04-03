@@ -1,15 +1,16 @@
 import { Request, Response } from "express";
 import Conversation from "../models/conversationModel";
-import Message from "../models/messageModel";
+import Message, { IMessage } from "../models/messageModel";
 import { UserType } from "./../middleware/auth";
 import { getReceiverSocketId, io } from "../socket/socket";
 
+// Send message api
 export const sendMessage = async (
   req: Request & { user?: UserType },
   res: Response
 ) => {
   try {
-    const { message } = req.body;
+    const { text } = req.body;
     const { id: receiverId } = req.params;
     const senderId = req.user?.userId;
 
@@ -24,27 +25,55 @@ export const sendMessage = async (
       });
     }
 
-    const newMessage = new Message({
-      senderId,
-      receiverId,
-      message,
-    });
-
-    if (newMessage) {
-      conversation.messages.push(newMessage._id);
+    let existingMessage: IMessage | null = null;
+    for (const msgId of conversation.messages) {
+      const msg = await Message.findById(msgId);
+      if (
+        msg?.senderId.toString() === senderId &&
+        msg?.receiverId.toString() === receiverId
+      ) {
+        existingMessage = msg;
+        break;
+      }
     }
 
-    // this will run in parallel
-    await Promise.all([conversation.save(), newMessage.save()]);
+    if (existingMessage) {
+      existingMessage.messages.push({
+        text,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      await existingMessage.save();
+    } else {
+      const newMessage = new Message({
+        senderId,
+        receiverId,
+        messages: [{ text, createdAt: new Date(), updatedAt: new Date() }],
+      });
 
-    // SOCKET IO FUNCTIONALITY WILL GO HERE
+      conversation.messages.push(newMessage._id);
+      await Promise.all([conversation.save(), newMessage.save()]);
+    }
+
+    // Fetch the conversation data with populated fields
+    const populatedConversation = await Conversation.findById(conversation._id)
+      .populate("participants", "_id username")
+      .populate({
+        path: "messages",
+        populate: [
+          { path: "senderId", select: "_id username" },
+          { path: "receiverId", select: "_id username" },
+        ],
+      });
+
     const receiverSocketId = getReceiverSocketId(receiverId);
     if (receiverSocketId) {
-      // io.to(<socket_id>).emit() used to send events to specific client
-      io.to(receiverSocketId).emit("newMessage", newMessage);
+      io.to(receiverSocketId).emit("newMessage", text);
     }
 
-    return res.status(201).json({ newMessage, success: true });
+    return res
+      .status(201)
+      .json({ conversation: populatedConversation, success: true });
   } catch (error) {
     console.error("Error in sending message", error);
     return res
@@ -53,6 +82,7 @@ export const sendMessage = async (
   }
 };
 
+// Get messages api
 export const getMessages = async (
   req: Request & { user?: UserType },
   res: Response

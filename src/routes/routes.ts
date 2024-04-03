@@ -16,7 +16,7 @@ route.post("/logout", authenticateToken, userLogout);
 
 route.get("/getUser", authenticateToken, getUsersForSidebar);
 
-route.post("/send/:id", sendMessage);
-route.get("/:id", getMessages);
+route.post("/send/:id", authenticateToken, sendMessage);
+route.get("/receive/:id", authenticateToken, getMessages);
 
 export default route;
