@@ -14,9 +14,9 @@ route.post("/register", userRegister);
 route.post("/login", userLogin);
 route.post("/logout", authenticateToken, userLogout);
 
+route.get("/getUser", authenticateToken, getUsersForSidebar);
+
 route.post("/send/:id", sendMessage);
 route.get("/:id", getMessages);
-
-route.get("/", authenticateToken, getUsersForSidebar);
 
 export default route;
