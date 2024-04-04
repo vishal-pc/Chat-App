@@ -10,6 +10,9 @@ interface IUser extends Document {
   gender: string;
   isOnline: boolean;
   isUserActive: boolean;
+  profilePicture: string;
+  setBio: string;
+  isBlocked: boolean;
 }
 
 const UserSchema: Schema<IUser> = new mongoose.Schema(
@@ -23,6 +26,9 @@ const UserSchema: Schema<IUser> = new mongoose.Schema(
     gender: { type: String },
     isOnline: { type: Boolean, default: false },
     isUserActive: { type: Boolean, default: false },
+    profilePicture: { type: String },
+    setBio: { type: String },
+    isBlocked: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

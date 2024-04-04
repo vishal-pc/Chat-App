@@ -3,7 +3,12 @@ import mongoose, { Document, Schema, Types } from "mongoose";
 export interface IMessage extends Document {
   senderId: Types.ObjectId;
   receiverId: Types.ObjectId;
-  messages: { text: string; createdAt: Date; updatedAt: Date }[];
+  messages: Array<{
+    text: string;
+    createdAt: Date;
+    updatedAt: Date;
+    isDeletedForSender: boolean;
+  }>;
 }
 
 const messageSchema: Schema<IMessage> = new mongoose.Schema(
@@ -15,6 +20,7 @@ const messageSchema: Schema<IMessage> = new mongoose.Schema(
         text: { type: String },
         createdAt: { type: Date, default: Date.now },
         updatedAt: { type: Date, default: Date.now },
+        isDeletedForSender: { type: Boolean, default: false },
       },
     ],
   },

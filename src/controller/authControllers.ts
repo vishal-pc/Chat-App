@@ -6,6 +6,7 @@ import jwt from "jsonwebtoken";
 import { envConfig } from "../config/envConfig";
 import { UserType } from "../middleware/auth";
 
+// Register Api
 export const userRegister = async (req: Request, res: Response) => {
   try {
     const {
@@ -74,6 +75,7 @@ export const userRegister = async (req: Request, res: Response) => {
   }
 };
 
+// Login Api
 export const userLogin = async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
@@ -95,7 +97,14 @@ export const userLogin = async (req: Request, res: Response) => {
     const token = jwt.sign(
       {
         userId: user._id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        userName: user.userName,
         email: user.email,
+        mobileNumber: user.mobileNumber,
+        gender: user.gender,
+        profilePicture: user.profilePicture,
+        setBio: user.setBio,
       },
       envConfig.Jwt_Secret,
       { expiresIn: "1h" }
@@ -118,6 +127,7 @@ export const userLogin = async (req: Request, res: Response) => {
   }
 };
 
+// Logout Api
 export const userLogout = async (
   req: Request & { user?: UserType },
   res: Response

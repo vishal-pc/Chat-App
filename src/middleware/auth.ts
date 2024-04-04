@@ -10,6 +10,7 @@ interface CustomRequest extends Request {
   user?: UserType;
 }
 
+// Token Authentication
 const authenticateToken = (
   req: CustomRequest,
   res: Response,
