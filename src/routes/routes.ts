@@ -12,6 +12,7 @@ import {
   getMessages,
   updateMessage,
   deleteMessage,
+  deleteConversation,
 } from "../controller/chatController";
 import {
   getUsersForSidebar,
@@ -63,6 +64,11 @@ route.delete(
   "/delete-message/:receiverId/:messageId/:textId",
   authenticateToken,
   deleteMessage
+);
+route.delete(
+  "/delete-all-message/:receiverId/:messageId",
+  authenticateToken,
+  deleteConversation
 );
 
 export default route;

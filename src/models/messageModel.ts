@@ -9,6 +9,7 @@ export interface IMessage extends Document {
     updatedAt: Date;
     isDeletedForSender: boolean;
   }>;
+  isChatDeleted: boolean;
 }
 
 const messageSchema: Schema<IMessage> = new mongoose.Schema(
@@ -23,6 +24,7 @@ const messageSchema: Schema<IMessage> = new mongoose.Schema(
         isDeletedForSender: { type: Boolean, default: false },
       },
     ],
+    isChatDeleted: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

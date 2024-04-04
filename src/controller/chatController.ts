@@ -58,6 +58,7 @@ export const sendMessage = async (
             isDeletedForSender: false,
           },
         ],
+        isChatDeleted: false,
       });
 
       conversation.messages.push(newMessage._id);
@@ -88,32 +89,6 @@ export const sendMessage = async (
     return res
       .status(500)
       .json({ message: "Error in sending message", success: false });
-  }
-};
-
-// Get Messages Api
-export const getMessages = async (
-  req: Request & { user?: UserType },
-  res: Response
-) => {
-  try {
-    const { id: userToChatId } = req.params;
-    const senderId = req.user?.userId;
-
-    const conversation = await Conversation.findOne({
-      participants: { $all: [senderId, userToChatId] },
-    }).populate("messages");
-
-    if (!conversation) return res.status(200).json([]);
-
-    const messages = conversation.messages;
-
-    return res.status(200).json({ messages, success: true });
-  } catch (error) {
-    console.error("Error in get message", error);
-    return res
-      .status(500)
-      .json({ message: "Error in get message", success: false });
   }
 };
 
@@ -212,121 +187,148 @@ export const deleteMessage = async (
 ) => {
   try {
     const { receiverId, messageId, textId } = req.params;
-    const { deleteForMe, deleteForEveryone } = req.query;
+    const { deleteOption } = req.query;
     const senderId = req.user?.userId;
-
-    console.log("Sender Id: " + senderId);
-    console.log("Reciver Id: " + receiverId);
-    console.log("Message Id: " + messageId);
-    console.log("Text Id: " + textId);
-    console.log("deleteForMe: " + deleteForMe);
-    console.log("deleteForEveryone: " + deleteForEveryone);
 
     // Validate if receiverId, messageId, and textId are valid ObjectIds
     if (
-      !mongoose.Types.ObjectId.isValid(receiverId as string) ||
-      !mongoose.Types.ObjectId.isValid(messageId as string) ||
-      !mongoose.Types.ObjectId.isValid(textId as string)
+      !mongoose.Types.ObjectId.isValid(receiverId) ||
+      !mongoose.Types.ObjectId.isValid(messageId) ||
+      !mongoose.Types.ObjectId.isValid(textId)
     ) {
       return res
         .status(400)
         .json({ message: "Invalid parameters", success: false });
     }
 
-    // Fetch the message data from the database
+    // Find the message by ID
     const message = await Message.findById(messageId);
+
     if (!message) {
       return res
         .status(404)
         .json({ message: "Message not found", success: false });
     }
-    console.log("Fetched Message:", message);
-    // Check if the sender is authorized to delete the message
+
+    // Check if the sender is the owner of the message
     if (message.senderId.toString() !== senderId) {
       return res.status(403).json({
-        message: "Unauthorized to delete this message",
+        message: "You are not authorized to delete this message",
         success: false,
       });
     }
 
-    // Use aggregation pipeline to update or delete the specific message text
-    let updateQuery: any[] = [];
-    if (deleteForEveryone === "true") {
-      console.log("Deleting message for everyone");
-      // Delete the message text completely
-      updateQuery = [
-        {
-          $match: { _id: new mongoose.Types.ObjectId(messageId as string) },
-        },
-        {
-          $set: {
-            messages: message.messages.filter(
-              (msg: any) => msg._id.toString() == textId
-            ),
-            updatedAt: new Date(),
-          },
-        },
-      ];
-    } else if (deleteForMe === "true") {
-      console.log("Deleting message for me only");
-      // Update the message to mark it as deleted for the sender only
-      updateQuery = [
-        {
-          $match: { _id: new mongoose.Types.ObjectId(messageId as string) },
-        },
-        {
-          $set: {
-            "messages.$[elem].isDeletedForSender": true,
-            updatedAt: new Date(),
-          },
-        },
-        {
-          $set: {
-            messages: {
-              $map: {
-                input: "$messages",
-                as: "msg",
-                in: {
-                  $mergeObjects: [
-                    "$$msg",
-                    {
-                      $cond: {
-                        if: {
-                          $eq: [
-                            "$$msg._id",
-                            new mongoose.Types.ObjectId(textId as string),
-                          ],
-                        },
-                        then: { isDeletedForSender: true }, // Set isDeletedForSender to true
-                        else: "$$msg", // Keep the existing message properties
-                      },
-                    },
-                  ],
-                },
-              },
-            },
-          },
-        },
-      ];
-    }
-    console.log("Update Query:", updateQuery);
+    // Find the specific message text in the messages array
+    const messageText = message.messages.find(
+      (msg: any) => msg._id.toString() === textId
+    );
 
-    const result = await Message.aggregate(updateQuery);
-
-    // Optionally, emit an event to notify receivers if needed
-    const receiverSocketId = getReceiverSocketId(receiverId as string);
-    if (receiverSocketId) {
-      io.to(receiverSocketId).emit("deleteMessage", textId as string);
+    if (!messageText) {
+      return res
+        .status(404)
+        .json({ message: "Message text not found", success: false });
     }
 
-    return res.status(200).json({
-      message: "Message deleted successfully",
-      success: true,
-    });
-  } catch (error) {
-    console.error("Error in deleting message", error);
+    // Perform different actions based on the deleteOption
+    switch (deleteOption) {
+      case "deleteforme":
+        // Update isDeletedForSender field of the specific message text
+        messageText.isDeletedForSender = true;
+        await message.save();
+        break;
+      case "deleteforeveryone":
+        // Remove the specific message text from the messages array
+        message.messages = message.messages.filter(
+          (msg: any) => msg._id.toString() !== textId
+        );
+        await message.save();
+        break;
+      default:
+        return res
+          .status(400)
+          .json({ message: "Invalid delete option", success: false });
+    }
+
     return res
-      .status(500)
-      .json({ message: "Error in deleting message", success: false });
+      .status(200)
+      .json({ message: "Message operation completed", success: true });
+  } catch (error) {
+    console.error("Error in performing message operation", error);
+    return res.status(500).json({
+      message: "Error in performing message operation",
+      success: false,
+    });
   }
 };
+
+// Delete Message Api
+export const deleteConversation = async (
+  req: Request & { user?: UserType },
+  res: Response
+) => {
+  try {
+    const { receiverId, messageId } = req.params;
+    const senderId = req.user?.userId;
+    if (
+      !mongoose.Types.ObjectId.isValid(receiverId) ||
+      !mongoose.Types.ObjectId.isValid(messageId)
+    ) {
+      return res
+        .status(400)
+        .json({ message: "Invalid parameters", success: false });
+    }
+
+    const message = await Message.findByIdAndUpdate(
+      messageId,
+      { $set: { isChatDeleted: true } },
+      { new: true }
+    );
+    if (!message) {
+      return res
+        .status(404)
+        .json({ message: "Message not found", success: false });
+    }
+    if (message.senderId.toString() !== senderId) {
+      return res.status(403).json({ message: "Unauthorized", success: false });
+    }
+    return res.status(200).json({ message: "Message deleted", success: true });
+  } catch (error) {
+    console.error("Error in performing message operation", error);
+    return res.status(500).json({
+      message: "Error in performing message operation",
+      success: false,
+    });
+  }
+};
+
+// Get Messages Api
+// export const getMessages = async (
+//   req: Request & { user?: UserType },
+//   res: Response
+// ) => {
+//   try {
+//     const { id: userToChatId } = req.params;
+//     const senderId = req.user?.userId;
+
+//     const conversation = await Conversation.findOne({
+//       participants: { $all: [senderId, userToChatId] },
+//     }).populate("messages");
+
+//     if (!conversation) return res.status(200).json([]);
+
+//     // Filter messages based on conditions
+//     const typedConversation = conversation as Conversation;
+//     const messages = typedConversation.messages.filter(
+//       (message: typeof Message) =>
+//         !(message.senderId.includes(senderId) && message.isDeletedForSender) &&
+//         !typedConversation.isChatDeleted
+//     );
+
+//     return res.status(200).json({ messages, success: true });
+//   } catch (error) {
+//     console.error("Error in get message", error);
+//     return res
+//       .status(500)
+//       .json({ message: "Error in get message", success: false });
+//   }
+// };
