@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import Conversation from "../models/conversationModel";
+import Conversation, { IChat } from "../models/conversationModel";
 import Message, { IMessage } from "../models/messageModel";
 import { UserType } from "./../middleware/auth";
 import { getReceiverSocketId, io } from "../socket/socket";
@@ -58,7 +58,6 @@ export const sendMessage = async (
             isDeletedForSender: false,
           },
         ],
-        isChatDeleted: false,
       });
 
       conversation.messages.push(newMessage._id);
@@ -267,19 +266,22 @@ export const deleteConversation = async (
   res: Response
 ) => {
   try {
-    const { receiverId, messageId } = req.params;
+    const { receiverId, conversationId } = req.params;
     const senderId = req.user?.userId;
+    // console.log("Sender ID:", senderId);
+    // console.log("Receiver ID:", receiverId);
+    // console.log("Conversation ID:", conversationId);
     if (
       !mongoose.Types.ObjectId.isValid(receiverId) ||
-      !mongoose.Types.ObjectId.isValid(messageId)
+      !mongoose.Types.ObjectId.isValid(conversationId)
     ) {
       return res
         .status(400)
         .json({ message: "Invalid parameters", success: false });
     }
 
-    const message = await Message.findByIdAndUpdate(
-      messageId,
+    const message = await Conversation.findByIdAndUpdate(
+      { _id: conversationId },
       { $set: { isChatDeleted: true } },
       { new: true }
     );
@@ -288,9 +290,14 @@ export const deleteConversation = async (
         .status(404)
         .json({ message: "Message not found", success: false });
     }
-    if (message.senderId.toString() !== senderId) {
-      return res.status(403).json({ message: "Unauthorized", success: false });
-    }
+    // if (
+    //   message.participants.toString() !== senderId &&
+    //   message.participants.toString() !== receiverId
+    // ) {
+    //   console.log("Participants:", message.participants.toString());
+    //   console.log("Unauthorized Access Attempt");
+    //   return res.status(403).json({ message: "Unauthorized", success: false });
+    // }
     return res.status(200).json({ message: "Message deleted", success: true });
   } catch (error) {
     console.error("Error in performing message operation", error);
@@ -302,33 +309,34 @@ export const deleteConversation = async (
 };
 
 // Get Messages Api
-// export const getMessages = async (
-//   req: Request & { user?: UserType },
-//   res: Response
-// ) => {
-//   try {
-//     const { id: userToChatId } = req.params;
-//     const senderId = req.user?.userId;
+export const getMessages = async (
+  req: Request & { user?: UserType },
+  res: Response
+) => {
+  try {
+    const { id: userToChatId } = req.params;
+    const senderId = req.user?.userId;
 
-//     const conversation = await Conversation.findOne({
-//       participants: { $all: [senderId, userToChatId] },
-//     }).populate("messages");
+    const conversation =
+      ((await Conversation.findOne({
+        participants: { $all: [senderId, userToChatId] },
+      }).populate("messages")) as IChat) || null;
 
-//     if (!conversation) return res.status(200).json([]);
+    if (!conversation) {
+      return res.status(200).json([]);
+    }
 
-//     // Filter messages based on conditions
-//     const typedConversation = conversation as Conversation;
-//     const messages = typedConversation.messages.filter(
-//       (message: typeof Message) =>
-//         !(message.senderId.includes(senderId) && message.isDeletedForSender) &&
-//         !typedConversation.isChatDeleted
-//     );
+    const filteredMessages = conversation.messages.map((msg) => {
+      const message = msg as unknown as IMessage;
+      message.messages = message.messages.filter(
+        (m) => !(m.isDeletedForSender && message.senderId.equals(senderId))
+      );
+      return message;
+    });
 
-//     return res.status(200).json({ messages, success: true });
-//   } catch (error) {
-//     console.error("Error in get message", error);
-//     return res
-//       .status(500)
-//       .json({ message: "Error in get message", success: false });
-//   }
-// };
+    res.status(200).json(filteredMessages);
+  } catch (error) {
+    console.log("Error in get messages: ", error);
+    res.status(500).json({ error: "Error in get messages" });
+  }
+};

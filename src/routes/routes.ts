@@ -66,7 +66,7 @@ route.delete(
   deleteMessage
 );
 route.delete(
-  "/delete-all-message/:receiverId/:messageId",
+  "/delete-all-message/:receiverId/:conversationId",
   authenticateToken,
   deleteConversation
 );

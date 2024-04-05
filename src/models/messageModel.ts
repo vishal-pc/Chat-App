@@ -9,13 +9,12 @@ export interface IMessage extends Document {
     updatedAt: Date;
     isDeletedForSender: boolean;
   }>;
-  isChatDeleted: boolean;
 }
 
 const messageSchema: Schema<IMessage> = new mongoose.Schema(
   {
-    senderId: [{ type: mongoose.Types.ObjectId, ref: "User" }],
-    receiverId: [{ type: mongoose.Types.ObjectId, ref: "User" }],
+    senderId: { type: Schema.Types.ObjectId, ref: "User" },
+    receiverId: { type: Schema.Types.ObjectId, ref: "User" },
     messages: [
       {
         text: { type: String },
@@ -24,7 +23,6 @@ const messageSchema: Schema<IMessage> = new mongoose.Schema(
         isDeletedForSender: { type: Boolean, default: false },
       },
     ],
-    isChatDeleted: { type: Boolean, default: false },
   },
   { timestamps: true }
 );
